@@ -1,24 +1,28 @@
-# ───────────────────────────────────────────────
-# Base image עם תמיכה ב-CUDA
+# Include Python
 FROM pytorch/pytorch:2.4.1-cuda12.1-cudnn9-runtime
 
-# סביבת עבודה
+# Define your working directory
 WORKDIR /
 
-# הגדרות CUDA
+# Configure LD_LIBRARY_PATH
 ENV LD_LIBRARY_PATH="/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:/opt/conda/lib/python3.11/site-packages/nvidia/cublas/lib"
 
-# התקנת כלים חיוניים
-RUN apt update && apt install -y ffmpeg git
+# Install relevant packages 
+RUN apt update
+RUN apt install -y ffmpeg
 
-# ───────────────────────────────────────────────
-# התקנת חבילות פייתון
-RUN pip install --no-cache-dir torch==2.4.1 runpod pyannote.audio==3.1.1
+# Install python packages
+RUN pip3 install ivrit[all]==0.1.8 torch==2.4.1 huggingface-hub==0.36.0 runpod
 
-# ───────────────────────────────────────────────
-# העתקת קובץ האינפרנס
-COPY infer.py .
+# preload relevant models
+RUN python3 -c 'import faster_whisper; m = faster_whisper.WhisperModel("ivrit-ai/whisper-large-v3-turbo-ct2")'
+RUN python3 -c 'import faster_whisper; m = faster_whisper.WhisperModel("ivrit-ai/yi-whisper-large-v3-turbo-ct2")'
+RUN python3 -c 'import faster_whisper; m = faster_whisper.WhisperModel("large-v3-turbo")'
+RUN python3 -c 'import pyannote.audio; p = pyannote.audio.Pipeline.from_pretrained("ivrit-ai/pyannote-speaker-diarization-3.1")'
+RUN python3 -c 'from speechbrain.inference.speaker import EncoderClassifier; EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")'
 
-# ───────────────────────────────────────────────
-# פקודת ההפעלה של השרת
-CMD ["python", "-u", "infer.py"]
+# Add your file
+ADD infer.py .
+
+# Call your file when your container starts
+CMD [ "python", "-u", "/infer.py" ]
